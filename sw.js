@@ -1,7 +1,7 @@
 // --- START OF FILE sw.js ---
 
-// 修改這裡：將 v2 改為 v3，瀏覽器就會知道有新版本，並重新下載 index.html
-const CACHE_NAME = 'travel-note-v7';
+// 修改這裡：更新版本號為 v8，確保瀏覽器重新下載優化後的 index.html
+const CACHE_NAME = 'travel-note-v8';
 
 const ASSETS_TO_CACHE = [
     './',
@@ -9,7 +9,7 @@ const ASSETS_TO_CACHE = [
     './manifest.json',
     './icon-192.png',
     './icon-512.png',
-    // 匯出 Excel 所需的函式庫
+    // 即使前端改為懶加載，這裡仍須保留，讓 SW 在背景預先下載，確保離線時也能匯出
     'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js'
 ];
 
@@ -29,7 +29,7 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keyList) => {
             return Promise.all(keyList.map((key) => {
-                // 清除舊版本的快取 (例如 v2)
+                // 清除舊版本的快取
                 if (key !== CACHE_NAME) {
                     console.log('[Service Worker] Removing old cache', key);
                     return caches.delete(key);
