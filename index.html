@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Travel Note</title>
+    
+    <!-- PWA 設定 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#F0A040">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <!-- 引入 Excel 處理套件 (SheetJS) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* --- 核心 UI 風格定義 (手繪筆記本風 - 還原版) --- */
+        :root {
+            --primary: #F0A040;   /* 主色: 溫暖橘 */
+            --secondary: #90B44B; /* 輔色: 柔和綠 */
+            --money: #C64756;     /* 費用: 鋼筆紅 */
+            --flight-bg: #FFFFFF; 
+            --bg: #F9F7E8;        /* 背景: 奶油紙色 */
+            --card-bg: #FFFFFF;   /* 卡片背景: 純白 */
+            --text: #3D3D3D;      /* 文字: 墨黑色 */
+            --gray: #A9A9A9;      
+            --border-color: #D3D3D3; /* 鉛筆線 */
+        }
+
+        body {
+            font-family: 'Avenir Next', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0; padding: 0; height: 100vh;
+            display: flex; flex-direction: column;
+            /* 避免 iOS PWA 狀態列重疊 */
+            padding-top: env(safe-area-inset-top); 
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        /* Header */
+        header {
+            background-color: var(--card-bg);
+            padding: 18px 25px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+            position: sticky; top: 0; z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
+        }
+        .header-title { 
+            /* 移除 cursor: pointer，讓它看起來不可點擊 */
+            font-size: 1.2rem; color: var(--primary); font-weight: 700; letter-spacing: 1px; 
+        }
+        .header-controls { display: flex; gap: 15px; align-items: center; }
+        
+        .total-cost-display {
+            font-size: 0.95rem; font-weight: 600; color: var(--money);
+            border: none; background: transparent; 
+        }
+        
+        .action-btn { 
+            cursor: pointer; font-size: 0.9rem; color: var(--gray); 
+            display: flex; align-items: center; gap: 4px; font-weight: 500; transition: 0.2s;
+        }
+        .action-btn:hover { color: var(--secondary); }
+
+        /* Layout Wrapper for Responsive Design */
+        .main-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto; /* 讓捲軸出現在這裡 */
+            width: 100%;
+        }
+
+        /* Rate Bar */
+        .rate-bar {
+            background: #FFFBEB; color: var(--text); padding: 10px; 
+            font-size: 0.85rem; text-align: center; cursor: pointer; 
+            border-bottom: 1px dashed var(--border-color); line-height: 1.4;
+            flex-shrink: 0;
+        }
+
+        /* Day Tabs */
+        .day-tabs {
+            display: flex; overflow-x: auto; padding: 15px 25px; gap: 10px;
+            scrollbar-width: none; background: var(--bg);
+            flex-shrink: 0;
+        }
+        .day-tab {
+            padding: 8px 16px; background: #FFFFFF; border: 2px solid var(--border-color);
+            border-radius: 20px; font-size: 0.85rem; font-weight: 600; color: var(--text);
+            cursor: pointer; white-space: nowrap; box-shadow: 1px 1px 0 rgba(0,0,0,0.05); transition: 0.2s;
+        }
+        .day-tab.active {
+            background-color: var(--primary); color: #fff; border-color: var(--primary);
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        /* Summary Box */
+        .summary-box {
+            margin: 0 25px 15px 25px; background: var(--card-bg); padding: 20px; 
+            border-radius: 12px; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 1px solid var(--border-color); 
+            flex-shrink: 0;
+        }
+        .summary-amount { font-size: 1.8rem; font-weight: 800; color: var(--money); }
+        .summary-title { font-size: 0.85rem; color: var(--gray); cursor: pointer; text-decoration: underline dotted; }
+
+        /* Timeline & Cards */
+        .timeline-container {
+            padding: 10px 25px 80px 25px; 
+            max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;
+        }
+        .timeline-item {
+            display: flex; margin-bottom: 30px; position: relative; animation: slideUp 0.3s ease-out;
+        }
+        .timeline-item::before {
+            content: ''; position: absolute; left: 35px; top: 30px; bottom: -30px; width: 1px; 
+            background-image: linear-gradient(to top, var(--border-color) 50%, rgba(255, 255, 255, 0) 50%);
+            background-size: 1px 8px; z-index: 0;
+        }
+        .timeline-item:last-child::before { display: none; }
+
+        .time-col {
+            width: 70px; font-size: 0.9rem; color: var(--text); padding-top: 5px; 
+            text-align: left; padding-right: 15px; font-weight: 700; flex-shrink: 0; line-height: 1.3;
+        }
+        .time-col span { display: block; font-weight: normal; font-size: 0.75rem; color: var(--gray); margin-top: 2px; }
+
+        .card {
+            background: var(--card-bg); border-radius: 12px; padding: 18px; flex: 1;
+            box-shadow: 4px 4px 0 var(--border-color), 0 2px 8px rgba(0,0,0,0.05); 
+            position: relative; z-index: 1; border: 1px solid var(--border-color); 
+            transition: transform 0.1s;
+        }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .card-title { font-weight: 700; font-size: 1.1rem; }
+        
+        .card-type-label {
+            font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px;
+            margin-bottom: 5px; display: inline-block;
+        }
+        .tag-spot { background: #E6F7FF; color: #1890FF; border: 1px solid #BAE7FF; } 
+        .tag-food { background: #FFF7E6; color: #FAAD14; border: 1px solid #FFE7BA; } 
+        .tag-transport { background: #F9E6FF; color: #9254DE; border: 1px solid #D3ADF7; } 
+        .tag-shopping { background: #F6FFED; color: var(--secondary); border: 1px solid #D9F7BE; }
+        .tag-flight { background: #EAEAEA; color: var(--text); border: 1px solid #CACACA; }
+
+        .card-actions { display: flex; gap: 10px; }
+        .btn-icon { cursor: pointer; color: var(--gray); font-size: 1.1rem; border: none; background: none; padding: 0; }
+        .btn-icon:hover { color: var(--money); }
+
+        .card-loc {
+            font-size: 0.85rem; color: var(--primary); display: inline-flex; align-items: center; 
+            gap: 4px; background: #F0F0F0; padding: 5px 10px; border-radius: 8px; 
+            text-decoration: none; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            margin-top: 8px;
+        }
+
+        .flight-grid {
+            display: grid; grid-template-columns: 20px 1fr; gap: 8px 10px;
+            font-size: 0.9rem; align-items: center; margin-top: 8px;
+        }
+        .flight-icon { text-align: center; color: var(--gray); font-size: 0.9rem; }
+        .flight-info-text { color: var(--text); }
+        .flight-time-sub { font-size: 0.8rem; color: var(--gray); margin-left: 5px; }
+
+        .transport-grid {
+            display: grid; grid-template-columns: 20px 1fr; gap: 10px;
+            margin-top: 8px; align-items: flex-start;
+        }
+        .transport-line {
+            position: relative; display: flex; flex-direction: column; align-items: center; height: 100%;
+        }
+        .transport-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--border-color); background: #fff; z-index: 1;}
+        .transport-bar { flex: 1; width: 2px; background: var(--border-color); margin: 2px 0; }
+        
+        .card-cost {
+            margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);
+            font-size: 1rem; color: var(--money); font-weight: 700;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* Modal & Inputs */
+        .fab {
+            position: fixed; bottom: 30px; right: 30px; width: 55px; height: 55px; 
+            background: var(--primary); color: var(--card-bg); font-size: 30px; border: none; 
+            cursor: pointer; z-index: 101; border-radius: 50%; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); display: none; z-index: 200;
+            justify-content: center; align-items: flex-end;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--bg); width: 100%; max-width: 500px;
+            border-radius: 15px 15px 0 0; padding: 25px; animation: slideUpModal 0.3s; 
+            display: flex; flex-direction: column; gap: 15px; max-height: 90vh; overflow-y: auto;
+            border-top: 4px solid var(--secondary);
+        }
+        .form-label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text); font-weight: 600; }
+        .form-input, .zone-select, .currency-select {
+            width: 100%; padding: 12px; border: 2px solid var(--border-color);
+            border-radius: 8px; font-size: 1rem; background: var(--card-bg); color: var(--text); box-sizing: border-box;
+            transition: 0.3s;
+        }
+        .form-row { display: flex; gap: 10px; }
+        
+        .input-panel {
+            background: var(--flight-bg); padding: 15px; border-radius: 10px; 
+            border: 1px dashed var(--border-color); display: none; flex-direction: column; gap: 15px;
+        }
+        .input-panel.show { display: flex; }
+        
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; text-align: center;}
+        .btn-primary { background: var(--primary); color: var(--card-bg); }
+        .btn-cancel { background: var(--border-color); color: var(--text); }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); border-radius: 8px; font-weight:bold; cursor:pointer; padding: 8px;}
+
+        /* System Messages */
+        #sys-toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #333; color: #fff; padding: 10px 20px; border-radius: 8px;
+            font-size: 0.9rem; z-index: 10000; opacity: 0; pointer-events: none; transition: 0.3s;
+        }
+        #sys-toast.show { opacity: 1; transform: translateX(-50%) translateY(10px); }
+        
+        #sys-confirm-overlay {
+            position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5);
+            display: none; justify-content: center; align-items: center; z-index: 9999;
+        }
+        .sys-box { background: #fff; padding: 20px; border-radius: 12px; text-align: center; width: 280px; }
+        .sys-btns { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+        .sys-btn { padding: 8px 20px; border-radius: 6px; border:none; cursor:pointer; font-weight:bold; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* --- Responsive Desktop Design (>= 768px) --- */
+        @media (min-width: 768px) {
+            body {
+                background-color: #EBE7D5; /* 背景稍微變深，凸顯筆記本 */
+                align-items: center;
+            }
+            header {
+                width: 100%;
+                max-width: 1000px;
+                margin-bottom: 10px;
+                border-radius: 0 0 12px 12px;
+            }
+            /* 重構佈局：Grid 雙欄 */
+            .main-wrapper {
+                display: grid;
+                grid-template-columns: 320px 1fr; /* 左側儀表板 | 右側行程 */
+                gap: 25px;
+                max-width: 1000px;
+                width: 100%;
+                padding: 0 20px 20px 20px;
+                box-sizing: border-box;
+                align-items: start;
+                overflow-y: visible; /* 外層不捲動，讓內容自適應 */
+            }
+
+            /* 左側：儀表板容器 */
+            .dashboard-sidebar {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                position: sticky;
+                top: 90px; /* 讓它隨捲動固定 */
+            }
+
+            /* 元件樣式覆寫 - 適應側邊欄 */
+            .rate-bar {
+                border-radius: 10px;
+                border: 1px solid var(--border-color);
+            }
+            .day-tabs {
+                flex-wrap: wrap; /* 改為多行顯示，不需橫向捲動 */
+                justify-content: flex-start;
+                padding: 0;
+                background: transparent;
+            }
+            .day-tab {
+                margin-bottom: 5px;
+                flex: 0 0 auto;
+            }
+            .summary-box {
+                margin: 0; /* 移除 margin，適應 Grid 格子 */
+            }
+
+            /* 右側：行程內容 */
+            .timeline-container {
+                max-width: none; /* 解除手機版寬度限制 */
+                padding: 0;
+                margin: 0;
+                overflow-y: visible;
+            }
+
+            /* FAB 按鈕位置調整 */
+            .fab {
+                right: calc((100vw - 1000px) / 2 + 40px); /* 保持在內容區域右下角 */
+            }
+        }
+
+        /* 超大螢幕 FAB 微調 */
+        @media (min-width: 1080px) {
+            .fab {
+                right: 50%;
+                margin-right: -460px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-title" id="headerTitle">TRAVEL NOTE</div>
+    <div class="header-controls">
+        <div class="total-cost-display" id="overallTotalCost">總計: TWD 0</div>
+        <div class="action-btn" onclick="openSettingsModal()">🗓️ 設定</div>
+        <div class="action-btn" onclick="openPackingModal()">🎒 清單</div>
+        <div class="action-btn" onclick="openDataModal()">📂 資料</div>
+        <div class="action-btn" onclick="clearData()">🗑️ 重置</div>
+    </div>
+</header>
+
+<!-- 響應式佈局容器 -->
+<div class="main-wrapper">
+    
+    <!-- 左側儀表板 (電腦版顯示於左側，手機版顯示於上方) -->
+    <div class="dashboard-sidebar">
+        <div class="rate-bar" id="rateBar" onclick="openRateModal()">
+            <div id="rateText">載入匯率中...</div>
+        </div>
+
+        <div class="summary-box">
+            <div>
+                <div style="font-size:0.8rem; color:var(--gray); margin-bottom:4px;">
+                    Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
+                </div>
+                <div class="summary-amount" id="dayTotal">TWD 0</div>
+            </div>
+        </div>
+
+        <div class="day-tabs" id="dayTabs"></div>
+    </div>
+
+    <!-- 右側行程內容 -->
+    <div class="timeline-container" id="timelineContainer"></div>
+
+</div>
+
+<button class="fab" onclick="openModal()">+</button>
+
+<!-- 隱藏的檔案輸入框 -->
+<input type="file" id="importFile" accept=".xlsx, .xls" style="display: none;" onchange="importFromExcel(event)">
+
+<div id="sys-toast">提示訊息</div>
+<div id="sys-confirm-overlay">
+    <div class="sys-box">
+        <div id="sys-confirm-msg">確認執行？</div>
+        <div class="sys-btns">
+            <button class="sys-btn" style="background:#eee" onclick="closeConfirm(false)">取消</button>
+            <button class="sys-btn" style="background:var(--primary); color:#fff" onclick="closeConfirm(true)">確定</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="itemModalOverlay">
+    <div class="modal">
+        <h2 style="margin:0; color:var(--primary);" id="modalTitle">新增行程</h2>
+        <div class="form-group">
+            <label class="form-label">類型</label>
+            <select class="form-input" id="inputType" onchange="toggleFields()">
+                <option value="spot">📷 景點</option>
+                <option value="food">🍴 美食</option>
+                <option value="transport">🚆 交通</option>
+                <option value="shopping">🛍️ 購物</option>
+                <option value="flight">✈️ 航班</option>
+            </select>
+        </div>
+        
+        <div id="normalFields">
+            <div class="form-row">
+                <div style="flex:1"><label class="form-label">時間</label><input type="time" class="form-input" id="inputTime"></div>
+                <div style="flex:2"><label class="form-label">活動名稱</label><input type="text" class="form-input" id="inputTitle" placeholder="例如: 晴空塔"></div>
+            </div>
+            <div style="margin-top:15px;">
+                <label class="form-label">地點 / Map 連結</label>
+                <input type="text" class="form-input" id="inputLoc" placeholder="貼上 Google Maps 連結">
+            </div>
+        </div>
+
+        <div id="transportFields" class="input-panel">
+            <label class="form-label">交通方式</label>
+            <input type="text" class="form-input" id="transportMode" placeholder="例如: 高鐵, JR">
+            <div class="form-row">
+                <div style="flex:1"><label class="form-label">出發時間</label><input type="time" class="form-input" id="transportDepTime"></div>
+                <div style="flex:1"><label class="form-label">抵達時間</label><input type="time" class="form-input" id="transportArrTime"></div>
+            </div>
+            <div style="margin-top:10px;">
+                <input type="text" class="form-input" id="transportDepLoc" placeholder="出發地 (例如: 東京車站)" style="margin-bottom:10px;">
+                <input type="text" class="form-input" id="transportArrLoc" placeholder="目的地 (例如: 大阪車站)">
+            </div>
+        </div>
+
+        <div id="flightFields" class="input-panel">
+            <label class="form-label">航班代號</label>
+            <input type="text" class="form-input" id="flightCode" placeholder="例如: JX800" style="text-transform:uppercase;">
+            
+            <div style="margin-top: 10px;">
+                <label class="form-label" style="color:var(--primary);">🛫 出發 (代號/時區/時間)</label>
+                <div class="form-row">
+                    <input type="text" class="form-input" id="depCode" placeholder="TPE" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('depCode', 'depZone')">
+                    <select id="depZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="-12">UTC-12</option><option value="-11">UTC-11</option><option value="-10">UTC-10</option><option value="-9">UTC-9</option><option value="-8">UTC-8</option><option value="-7">UTC-7</option><option value="-6">UTC-6</option><option value="-5">UTC-5</option><option value="-4">UTC-4</option><option value="-3">UTC-3</option><option value="-2">UTC-2</option><option value="-1">UTC-1</option><option value="+0">UTC+0</option><option value="+1">UTC+1</option><option value="+2">UTC+2</option><option value="+3">UTC+3</option><option value="+4">UTC+4</option><option value="+5">UTC+5</option><option value="+6">UTC+6</option><option value="+7">UTC+7</option><option value="+8">UTC+8</option><option value="+9">UTC+9</option><option value="+10">UTC+10</option><option value="+11">UTC+11</option><option value="+12">UTC+12</option><option value="+13">UTC+13</option><option value="+14">UTC+14</option></select>
+                </div>
+                <input type="time" class="form-input" id="depTime" style="margin-top:5px;" onchange="calcDuration()">
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <label class="form-label" style="color:var(--secondary);">🛬 抵達 (代號/時區/時間)</label>
+                <div class="form-row">
+                    <input type="text" class="form-input" id="arrCode" placeholder="NRT" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('arrCode', 'arrZone')">
+                    <select id="arrZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="-12">UTC-12</option><option value="-11">UTC-11</option><option value="-10">UTC-10</option><option value="-9">UTC-9</option><option value="-8">UTC-8</option><option value="-7">UTC-7</option><option value="-6">UTC-6</option><option value="-5">UTC-5</option><option value="-4">UTC-4</option><option value="-3">UTC-3</option><option value="-2">UTC-2</option><option value="-1">UTC-1</option><option value="+0">UTC+0</option><option value="+1">UTC+1</option><option value="+2">UTC+2</option><option value="+3">UTC+3</option><option value="+4">UTC+4</option><option value="+5">UTC+5</option><option value="+6">UTC+6</option><option value="+7">UTC+7</option><option value="+8">UTC+8</option><option value="+9">UTC+9</option><option value="+10">UTC+10</option><option value="+11">UTC+11</option><option value="+12">UTC+12</option><option value="+13">UTC+13</option><option value="+14">UTC+14</option></select>
+                </div>
+                <input type="time" class="form-input" id="arrTime" style="margin-top:5px;" onchange="calcDuration()">
+            </div>
+            <div id="durationDisplay" style="text-align:center; font-size:0.9rem; color:var(--primary); font-weight:bold; margin-top:10px;"></div>
+        </div>
+
+        <div style="margin-top:15px;">
+            <label class="form-label">金額</label>
+            <div class="form-row">
+                <select id="inputCurrency" class="currency-select" style="flex:1">
+                    <option value="TWD">TWD</option>
+                    <option value="JPY">JPY</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="KRW">KRW</option>
+                    <option value="THB">THB</option>
+                    <option value="VND">VND</option>
+                    <option value="PHP">PHP</option>
+                    <option value="NZD">NZD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="IDR">IDR</option>
+                    <option value="CHF">CHF</option>
+                </select>
+                <input type="number" class="form-input" id="inputCost" placeholder="0" style="flex:2;">
+            </div>
+        </div>
+        <div style="margin-top:15px;">
+            <label class="form-label">備註</label>
+            <textarea class="form-input" id="inputNotes" rows="2"></textarea>
+        </div>
+        
+        <div class="btn-group">
+            <button class="btn btn-cancel" onclick="closeModal('itemModalOverlay')">取消</button>
+            <button class="btn btn-primary" onclick="saveItem()">儲存</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="settingsModalOverlay"><div class="modal"><h2>旅程設定</h2><input type="text" class="form-input" id="inputTripName" placeholder="旅程名稱"><input type="date" class="form-input" id="inputStartDate" style="margin-top:10px;"><div class="btn-group"><button class="btn btn-cancel" onclick="closeModal('settingsModalOverlay')">取消</button><button class="btn btn-primary" onclick="saveSettings()">儲存</button></div></div></div>
+
+<div class="modal-overlay" id="rateModalOverlay">
+    <div class="modal">
+        <h2>匯率設定 (手動 / 自動)</h2>
+        <div id="currentRatesList" style="background:#FAFAFA; padding:10px; border-radius:8px; border:1px dashed #CCC; font-size:0.9rem;"></div>
+        <p style="font-size:0.85rem;color:#666;margin:10px 0;line-height:1.5;">
+            系統每 10 分鐘自動從 Global API 更新 (含1.5%緩衝)。<br>若無網路，請在下方<b>手動輸入</b>。
+        </p>
+        <div class="form-row" style="margin-top:10px;">
+            <input type="text" id="currencyCode" class="form-input" placeholder="代號 (如 JPY)" style="text-transform:uppercase; flex:1;">
+            <input type="number" id="exchangeRate" class="form-input" placeholder="匯率 (1外幣=?台幣)" style="flex:2;">
+        </div>
+        <button class="btn-outline" style="width:100%; margin-top:10px;" onclick="fetchRateManual()">🌐 嘗試線上抓取 (輔助)</button>
+        <div class="btn-group" style="margin-top:15px;">
+            <button class="btn btn-cancel" onclick="closeModal('rateModalOverlay')">關閉</button>
+            <button class="btn btn-primary" onclick="saveRate()">儲存設定</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="packingModalOverlay"><div class="modal"><h2>物品清單</h2><div class="form-row"><input type="text" id="newPackingItemName" class="form-input"><button class="btn btn-primary" onclick="addItemToPackingList()">新增</button></div><div id="packingListContainer" style="margin-top:15px;"></div><button class="btn btn-cancel" onclick="closeModal('packingModalOverlay')">關閉</button></div></div>
+
+<!-- 資料匯入匯出 Modal -->
+<div class="modal-overlay" id="dataModalOverlay">
+    <div class="modal">
+        <h2 style="color:var(--primary)">資料備份 / 還原</h2>
+        <p style="font-size:0.9rem; color:#666; margin-bottom:15px; line-height: 1.5;">您可以將目前的行程匯出成 Excel 檔案進行備份，或是匯入之前的備份檔。</p>
+        
+        <div class="btn-group" style="flex-direction: column; gap: 15px;">
+            <button class="btn btn-outline" onclick="exportToExcel(); closeModal('dataModalOverlay')">📥 匯出行程 (Excel)</button>
+            <button class="btn btn-outline" onclick="triggerImport(); closeModal('dataModalOverlay')">📂 匯入行程 (Excel)</button>
+        </div>
+        
+        <button class="btn btn-cancel" style="margin-top:15px;" onclick="closeModal('dataModalOverlay')">關閉</button>
+    </div>
+</div>
+
+<script>
+    // --- PWA Service Worker Registration ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW Registered!', reg))
+                .catch(err => console.log('SW Failed', err));
+        });
+    }
+
+    // System Utils
+    function showToast(msg) { const t=document.getElementById('sys-toast'); t.innerText=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+    let confirmCb = null;
+    function openConfirm(msg, cb) { document.getElementById('sys-confirm-msg').innerText=msg; document.getElementById('sys-confirm-overlay').style.display='flex'; confirmCb=cb; }
+    function closeConfirm(res) { document.getElementById('sys-confirm-overlay').style.display='none'; if(res&&confirmCb) confirmCb(); confirmCb=null; }
+
+    // Data
+    let days = JSON.parse(localStorage.getItem('tripData_Edit')) || { 1: [] };
+    
+    // 初始化設定
+    let settings = JSON.parse(localStorage.getItem('tripSettings_Edit')) || { 
+        rates: { 'JPY': 0.21, 'USD': 30.5, 'EUR': 32.5, 'TWD': 1.0 }, 
+        startDate: '',
+        tripName: 'TRAVEL NOTE',
+        packingList: [] 
+    };
+
+    // 擴充：檢查並加入新支援的貨幣 (若舊資料中沒有)
+    const newCurrencies = { 
+        'THB': 0.9, 'VND': 0.0013, 'PHP': 0.56, 'NZD': 19.5, 'GBP': 40.5, 'IDR': 0.002, 'CHF': 35.5, 'KRW': 0.024 
+    };
+    Object.keys(newCurrencies).forEach(k => {
+        if (settings.rates[k] === undefined) settings.rates[k] = newCurrencies[k];
+    });
+
+    let currentDay = 1;
+    let editingItemId = null; 
+    let lastUpdateStr = localStorage.getItem('lastRateUpdate_Edit') || '尚未更新'; 
+
+    // --- 機場時區擴充表 ---
+    const airportTimezones = {
+        "TPE": "+8", "TSA": "+8", "KHH": "+8", "RMQ": "+8",
+        "NRT": "+9", "HND": "+9", "KIX": "+9", "FUK": "+9", "CTS": "+9", "OKA": "+9", "NGO": "+9", "SDJ": "+9", "ISG": "+9",
+        "ICN": "+9", "GMP": "+9", "PUS": "+9", "CJU": "+9",
+        "HKG": "+8", "MFM": "+8", "PEK": "+8", "PVG": "+8", "SHA": "+8", "CAN": "+8",
+        "BKK": "+7", "DMK": "+7", "CNX": "+7",
+        "SIN": "+8",
+        "KUL": "+8", "BKI": "+8", "PEN": "+8",
+        "SGN": "+7", "HAN": "+7", "DAD": "+7",
+        "MNL": "+8", "CEB": "+8",
+        "DPS": "+8", "CGK": "+7",
+        "LAX": "-8", "SFO": "-8", "SEA": "-8", "LAS": "-8",
+        "JFK": "-5", "EWR": "-5", "LGA": "-5",
+        "ORD": "-6", "DFW": "-6",
+        "HNL": "-10",
+        "GUM": "+10",
+        "LHR": "+0", "LGW": "+0",
+        "CDG": "+1", "ORY": "+1",
+        "FRA": "+1", "MUC": "+1", "BER": "+1",
+        "FCO": "+1", "MXP": "+1",
+        "AMS": "+1",
+        "VIE": "+1",
+        "PRG": "+1",
+        "BCN": "+1", "MAD": "+1",
+        "IST": "+3",
+        "ZRH": "+1",
+        "SYD": "+10", "MEL": "+10", "BNE": "+10",
+        "AKL": "+12", "CHC": "+12",
+        "DXB": "+4"
+    };
+
+    // --- 匯率自動更新邏輯 ---
+    async function fetchExchangeData() {
+        try {
+            const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+            if(!res.ok) throw new Error();
+            const data = await res.json();
+            console.log('Update Source: ExchangeRate-API');
+            return { source: 'Global API', rates: data.rates };
+        } catch(e) { console.warn("Primary API failed, trying backup..."); }
+
+        try {
+            const res = await fetch('https://open.er-api.com/v6/latest/USD');
+            if(!res.ok) throw new Error();
+            const data = await res.json();
+            console.log('Update Source: OpenER');
+            return { source: 'Global (Backup)', rates: data.rates };
+        } catch(e) { return null; }
+    }
+
+    async function autoUpdateRates(silent = false) {
+        if(!settings.rates['TWD']) settings.rates['TWD'] = 1.0; 
+        if(!silent) showToast("🔄 正在更新匯率...");
+        
+        const result = await fetchExchangeData();
+        if(!result) { if(!silent) showToast("⚠️ 離線模式：無法更新匯率"); return; }
+        
+        const { source, rates } = result; 
+        const usdToTwd = rates['TWD']; 
+
+        if(!usdToTwd) return;
+
+        let updated = false;
+        Object.keys(settings.rates).forEach(code => {
+            if(code === 'TWD') return;
+            const usdToTarget = rates[code]; 
+            if(usdToTarget > 0) {
+                const rate = (usdToTwd / usdToTarget) * 1.015; 
+                settings.rates[code] = rate;
+                updated = true;
+            }
+        });
+
+        if(updated) {
+            const now = new Date();
+            lastUpdateStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+            localStorage.setItem('tripSettings_Edit', JSON.stringify(settings));
+            localStorage.setItem('lastRateUpdate_Edit', lastUpdateStr);
+            renderRateBar();
+            if(!silent) showToast(`✅ 更新成功 (${source})`);
+        }
+    }
+
+    function initAutoUpdate() {
+        if(navigator.onLine) { autoUpdateRates(true); }
+        setInterval(() => { if(navigator.onLine) autoUpdateRates(true); }, 600000); 
+    }
+
+    async function fetchRateManual() {
+        if(!navigator.onLine) { showToast("❌ 無網路連線"); return; }
+        const code = document.getElementById('currencyCode').value.toUpperCase();
+        if(code.length!==3) { alert("請輸入3碼代號"); return; }
+        showToast("⏳ 抓取中...");
+        
+        const result = await fetchExchangeData();
+        if(result) {
+            const { rates } = result;
+            const usdToTwd = rates['TWD'];
+            const usdToTarget = rates[code];
+
+            if(usdToTarget > 0 && usdToTwd > 0) {
+                const rate = (usdToTwd / usdToTarget) * 1.015;
+                document.getElementById('exchangeRate').value = rate.toFixed(4);
+                showToast("✅ 抓取成功");
+            } else { showToast("❌ 無此貨幣資料"); }
+        } else { showToast("❌ 連線失敗"); }
+    }
+
+    // --- Excel Import Logic ---
+    function triggerImport() {
+        document.getElementById('importFile').click();
+    }
+
+    function importFromExcel(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        openConfirm("匯入將會覆蓋目前的行程資料，確定要繼續嗎？", () => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    const sheetName = "行程明細";
+                    const worksheet = workbook.Sheets[sheetName];
+                    if (worksheet) {
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        
+                        const newDays = {};
+                        let foundStartDate = null;
+                        
+                        jsonData.forEach(row => {
+                            const dayStr = row["Day"] || "Day 1";
+                            const dayNum = parseInt(dayStr.replace("Day ", "")) || 1;
+
+                            if (dayNum === 1 && row["日期"] && !foundStartDate) {
+                                foundStartDate = row["日期"];
+                            }
+
+                            if (!newDays[dayNum]) newDays[dayNum] = [];
+
+                            const typeMap = { '景點':'spot', '美食':'food', '交通':'transport', '購物':'shopping', '航班':'flight' };
+                            const type = typeMap[row["類型"]] || 'spot';
+
+                            let time = row["時間"] || "";
+                            let depTime = time;
+                            let arrTime = "";
+                            if (time.includes("-")) {
+                                const parts = time.split("-").map(t => t.trim());
+                                depTime = parts[0];
+                                arrTime = parts[1];
+                            }
+
+                            const item = {
+                                id: Date.now() + Math.random(),
+                                type: type,
+                                title: row["項目名稱"] || "",
+                                cost: parseFloat(row["原始金額"]) || 0,
+                                currency: row["幣別"] || "TWD",
+                                notes: row["備註"] || ""
+                            };
+
+                            if (type === 'flight') {
+                                item.depTime = depTime;
+                                item.arrTime = arrTime;
+                                item.flightCode = item.title;
+                                item.depCode = ""; item.arrCode = ""; 
+                                item.depZone = 8; item.arrZone = 8;
+                            } else if (type === 'transport') {
+                                item.depTime = depTime;
+                                item.arrTime = arrTime;
+                                item.transportMode = item.title;
+                                item.transportDepLoc = ""; 
+                                item.transportArrLoc = "";
+                            } else {
+                                item.time = depTime;
+                                item.loc = row["詳細資訊/地點"] || "";
+                            }
+
+                            newDays[dayNum].push(item);
+                        });
+
+                        days = newDays;
+                        if (foundStartDate && /^\d{4}-\d{2}-\d{2}$/.test(foundStartDate)) {
+                            settings.startDate = foundStartDate;
+                        }
+                    }
+
+                    const packSheet = workbook.Sheets["打包清單"];
+                    if (packSheet) {
+                        const packData = XLSX.utils.sheet_to_json(packSheet);
+                        settings.packingList = packData.map(row => ({
+                            n: row["物品名稱"],
+                            chk: row["狀態"] === "已帶"
+                        }));
+                    }
+
+                    saveData();
+                    showToast("✅ 匯入成功！");
+                    setTimeout(() => location.reload(), 1000);
+
+                } catch (error) {
+                    console.error(error);
+                    showToast("❌ 匯入失敗，格式錯誤");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+        
+        event.target.value = '';
+    }
+
+    // --- Excel Export Logic ---
+    function exportToExcel() {
+        if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
+
+        const header = ["Day", "日期", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註"];
+        const data = [header];
+
+        const sortedDays = Object.keys(days).map(Number).sort((a,b)=>a-b);
+        
+        sortedDays.forEach(dayNum => {
+            const items = days[dayNum];
+            if (!items || items.length === 0) return;
+
+            items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
+
+            let dateStr = "";
+            if (settings.startDate) {
+                const d = new Date(settings.startDate);
+                d.setDate(d.getDate() + (dayNum - 1));
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                dateStr = `${y}-${m}-${dd}`;
+            }
+
+            items.forEach(item => {
+                let details = "";
+                let timeStr = item.time || "";
+
+                if (item.type === 'flight') {
+                    timeStr = `${item.depTime} - ${item.arrTime}`;
+                    details = `航班: ${item.flightCode || '-'} | ${item.depCode} -> ${item.arrCode}`;
+                } else if (item.type === 'transport') {
+                    timeStr = `${item.depTime} - ${item.arrTime}`;
+                    details = `${item.transportMode || '交通'} | ${item.transportDepLoc} -> ${item.transportArrLoc}`;
+                } else {
+                    details = item.loc || "";
+                }
+
+                const currency = item.currency || 'TWD';
+                const rate = settings.rates[currency] || 1;
+                const cost = item.cost || 0;
+                const costTWD = Math.round(cost * rate);
+
+                const typeNameMap = { 'spot':'景點', 'food':'美食', 'transport':'交通', 'shopping':'購物', 'flight':'航班' };
+                const typeName = typeNameMap[item.type] || item.type;
+
+                data.push([
+                    `Day ${dayNum}`,
+                    dateStr,
+                    timeStr,
+                    typeName,
+                    item.title || item.flightCode || item.transportMode || '',
+                    details,
+                    cost > 0 ? cost : '',
+                    cost > 0 ? currency : '',
+                    cost > 0 && currency !== 'TWD' ? rate.toFixed(3) : '',
+                    cost > 0 ? costTWD : '',
+                    item.notes || ''
+                ]);
+            });
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [
+            { wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 },
+            { wch: 10 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 30 }
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "行程明細");
+
+        if (settings.packingList && settings.packingList.length > 0) {
+            const packData = [["狀態", "物品名稱"]];
+            settings.packingList.forEach(p => {
+                packData.push([p.chk ? "已帶" : "未帶", p.n]);
+            });
+            const wsPack = XLSX.utils.aoa_to_sheet(packData);
+            XLSX.utils.book_append_sheet(wb, wsPack, "打包清單");
+        }
+
+        const fileName = `${settings.tripName || 'Travel_Note'}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    // --- Rendering Logic ---
+    function renderUI() {
+        document.getElementById('headerTitle').innerText = (settings.tripName || 'TRAVEL NOTE');
+        document.getElementById('overallTotalCost').innerText = `總計: TWD ${calcTotal()}`;
+        renderRateBar();
+        renderTabs();
+        renderTimeline();
+    }
+
+    function renderRateBar() {
+        const targetCurrencies = ['JPY', 'USD'];
+        const rateList = [];
+        targetCurrencies.forEach(code => {
+            if(settings.rates[code]) {
+                rateList.push(`1${code}≈${settings.rates[code].toFixed(2)}`);
+            }
+        });
+        const rateStr = rateList.length ? rateList.join(' | ') : '載入匯率中...';
+        document.getElementById('rateText').innerHTML = `<div style="font-weight:700">${rateStr}</div><div style="font-size:0.75rem; color:#666; margin-top:3px;">來源: Global API (含1.5%緩衝) | 更新: ${lastUpdateStr}</div>`;
+    }
+
+    function renderTimeline() {
+        const container = document.getElementById('timelineContainer');
+        container.innerHTML = '';
+        document.getElementById('currentDayNum').innerText = currentDay;
+        
+        if (settings.startDate) {
+            const d = new Date(settings.startDate);
+            d.setDate(d.getDate() + currentDay - 1);
+            document.getElementById('dateDisplayInSummary').innerText = `(${d.getMonth()+1}/${d.getDate()})`;
+        }
+
+        const items = days[currentDay] || [];
+        let dayTotal = 0;
+        items.forEach(i => dayTotal += (i.cost||0) * (settings.rates[i.currency||'TWD']||1));
+        
+        document.getElementById('dayTotal').innerText = `TWD ${Math.round(dayTotal).toLocaleString()}`;
+
+        items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
+
+        if(items.length===0) { container.innerHTML='<div style="text-align:center;color:#ccc;margin-top:50px;">點擊 + 新增行程</div>'; return; }
+
+        items.forEach(item => {
+            const html = getCardHTML(item);
+            const div = document.createElement('div');
+            div.className = 'timeline-item';
+            div.innerHTML = html;
+            container.appendChild(div);
+        });
+    }
+
+    function getCardHTML(item) {
+        let timeDisplay = item.time || item.depTime || '';
+        let timeSub = '';
+        if(item.type === 'flight') timeSub = '起飛';
+        if(item.type === 'transport') timeSub = '出發';
+        const timeCol = timeDisplay ? `${timeDisplay}<span>${timeSub}</span>` : '全日';
+
+        let costHTML = '';
+        if (item.cost > 0) {
+            const rate = settings.rates[item.currency||'TWD'] || 1;
+            const twd = Math.round(item.cost * rate).toLocaleString();
+            costHTML = `<div class="card-cost"><span>${item.currency} ${item.cost.toLocaleString()}</span><span style="font-size:0.8em;color:#999;">≈ TWD ${twd}</span></div>`;
+        }
+
+        const tagMap = { 'spot':'tag-spot', 'food':'tag-food', 'transport':'tag-transport', 'shopping':'tag-shopping', 'flight':'tag-flight' };
+        const tagName = { 'spot':'景點', 'food':'美食', 'transport':'交通', 'shopping':'購物', 'flight':'航班' };
+        const tagHTML = `<span class="card-type-label ${tagMap[item.type]||''}">${tagName[item.type]||'活動'}</span>`;
+
+        let contentHTML = '';
+        let title = item.title; 
+
+        if (item.type === 'flight') {
+            title = item.title || item.flightCode || '航班行程';
+            contentHTML += `
+                <div class="flight-grid">
+                    <div class="flight-icon">✈️</div><div class="flight-info-text" style="font-weight:bold;">${item.flightCode || '航班'}</div>
+                    <div class="flight-icon">🛫</div><div class="flight-info-text">${item.depTime} <span class="flight-time-sub">${item.depCode} (UTC+${item.depZone})</span></div>
+                    <div class="flight-icon">🛬</div><div class="flight-info-text">${item.arrTime} <span class="flight-time-sub">${item.arrCode} (UTC+${item.arrZone})</span></div>
+                </div>`;
+        } else if (item.type === 'transport') {
+            title = item.title || item.transportMode || '交通行程';
+            contentHTML += `
+                <div class="transport-grid">
+                    <div class="transport-line"><div class="transport-dot"></div><div class="transport-bar"></div><div class="transport-dot" style="background:var(--border-color);"></div></div>
+                    <div>
+                        <div style="font-weight:bold; color:var(--text);">${item.transportMode || '交通'}</div>
+                        <div class="transport-detail" style="margin-top:4px; font-size:0.9rem;">${item.depTime} ${item.transportDepLoc||'起點'}</div>
+                        <div class="transport-detail" style="font-size:0.9rem;">${item.arrTime} ${item.transportArrLoc||'終點'}</div>
+                    </div>
+                </div>`;
+        } else {
+            if(item.loc) {
+                const isUrl = item.loc.startsWith('http');
+                const url = isUrl ? item.loc : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.loc)}`;
+                const locText = item.loc.length > 30 ? '地圖連結' : item.loc;
+                contentHTML += `<a href="${url}" target="_blank" class="card-loc">📍 ${locText}</a>`;
+            }
+        }
+        
+        if(item.notes) {
+            contentHTML += `<div style="font-size:0.85rem; color:#666; margin-top:8px; white-space: pre-wrap; padding-top:4px; border-top:1px dashed #eee;">${item.notes}</div>`;
+        }
+
+        return `
+            <div class="time-col">${timeCol}</div>
+            <div class="card type-${item.type}">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        ${tagHTML}
+                        <div class="card-title">${title}</div>
+                        ${item.type==='flight' && item.duration ? `<span style="font-size:0.75rem; color:var(--secondary);">⏳ ${item.duration}</span>` : ''}
+                    </div>
+                    <div class="card-actions"><button class="btn-icon" onclick="openModal(${item.id})">✎</button><button class="btn-icon" onclick="deleteItem(${item.id})">×</button></div>
+                </div>
+                ${contentHTML} ${costHTML}
+            </div>`;
+    }
+
+    // Actions
+    function saveItem() {
+        const type = document.getElementById('inputType').value;
+        const cost = parseFloat(document.getElementById('inputCost').value) || 0;
+        const currency = document.getElementById('inputCurrency').value;
+        const notes = document.getElementById('inputNotes').value.trim();
+        const inputTime = document.getElementById('inputTime').value;
+        
+        let newItem = {
+            id: editingItemId || Date.now(),
+            type, cost, currency, notes
+        };
+
+        if (type === 'flight') {
+            newItem.flightCode = document.getElementById('flightCode').value.toUpperCase().trim();
+            newItem.depCode = document.getElementById('depCode').value.toUpperCase().trim();
+            newItem.arrCode = document.getElementById('arrCode').value.toUpperCase().trim();
+            newItem.depTime = document.getElementById('depTime').value;
+            newItem.arrTime = document.getElementById('arrTime').value;
+            newItem.depZone = parseInt(document.getElementById('depZone').value);
+            newItem.arrZone = parseInt(document.getElementById('arrZone').value);
+            newItem.title = newItem.flightCode || `航班 ${newItem.depCode}➝${newItem.arrCode}`;
+            newItem.time = newItem.depTime;
+            newItem.duration = calculateDuration(newItem.depTime, newItem.arrTime, newItem.depZone, newItem.arrZone);
+            
+        } else if (type === 'transport') {
+            newItem.transportMode = document.getElementById('transportMode').value.trim();
+            newItem.depTime = document.getElementById('transportDepTime').value;
+            newItem.arrTime = document.getElementById('transportArrTime').value;
+            newItem.transportDepLoc = document.getElementById('transportDepLoc').value.trim();
+            newItem.transportArrLoc = document.getElementById('transportArrLoc').value.trim();
+            newItem.title = newItem.transportMode || '交通';
+            newItem.time = newItem.depTime;
+            
+        } else {
+            const title = document.getElementById('inputTitle').value.trim() || '未命名'; 
+            const loc = document.getElementById('inputLoc').value.trim();
+            newItem.title = title;
+            newItem.time = inputTime;
+            newItem.loc = loc;
+        }
+
+        if(editingItemId) {
+            const idx = days[currentDay].findIndex(i=>i.id===editingItemId);
+            if(idx!==-1) days[currentDay][idx] = newItem;
+        } else { days[currentDay].push(newItem); }
+        
+        saveData(); closeModal('itemModalOverlay'); renderUI();
+    }
+
+    // Modal Logic
+    function openModal(id) {
+        editingItemId = id; document.getElementById('itemModalOverlay').classList.add('open');
+        document.querySelectorAll('.form-input').forEach(e => e.value = '');
+        document.getElementById('inputTime').value = '09:00';
+        document.getElementById('inputType').value = 'spot';
+        document.getElementById('inputCurrency').value = 'TWD';
+        document.getElementById('depZone').value = 8; document.getElementById('arrZone').value = 9;
+        document.getElementById('durationDisplay').innerText = '';
+
+        if(id) {
+            const item = days[currentDay].find(i=>i.id===id);
+            if(item) {
+                document.getElementById('inputType').value = item.type;
+                document.getElementById('inputCurrency').value = item.currency || 'TWD';
+                document.getElementById('inputCost').value = item.cost || '';
+                document.getElementById('inputNotes').value = item.notes || '';
+                
+                if (item.type === 'flight') {
+                    document.getElementById('flightCode').value = item.flightCode || '';
+                    document.getElementById('depCode').value = item.depCode || '';
+                    document.getElementById('arrCode').value = item.arrCode || '';
+                    document.getElementById('depTime').value = item.depTime || '09:00';
+                    document.getElementById('arrTime').value = item.arrTime || '10:00';
+                    document.getElementById('depZone').value = item.depZone || 8;
+                    document.getElementById('arrZone').value = item.arrZone || 9;
+                    calcDuration();
+                } else if (item.type === 'transport') {
+                    document.getElementById('transportMode').value = item.transportMode || '';
+                    document.getElementById('transportDepTime').value = item.depTime || '09:00';
+                    document.getElementById('transportArrTime').value = item.arrTime || '10:00';
+                    document.getElementById('transportDepLoc').value = item.transportDepLoc || '';
+                    document.getElementById('transportArrLoc').value = item.transportArrLoc || '';
+                } else {
+                    document.getElementById('inputTitle').value = item.title || '';
+                    document.getElementById('inputTime').value = item.time || '09:00';
+                    document.getElementById('inputLoc').value = item.loc || '';
+                }
+            }
+        }
+        toggleFields();
+    }
+    
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); editingItemId=null; }
+    function deleteItem(id) { openConfirm('刪除此行程？', ()=>{ days[currentDay]=days[currentDay].filter(i=>i.id!==id); saveData(); renderUI(); }); }
+    function calcTotal() { let t=0; Object.values(days).flat().forEach(i=>t+=(i.cost||0)*(settings.rates[i.currency]||1)); return Math.round(t).toLocaleString(); }
+    
+    function toggleFields() {
+        const t = document.getElementById('inputType').value;
+        const isFlight = t==='flight', isTrans = t==='transport';
+        document.getElementById('normalFields').style.display = (isFlight||isTrans)?'none':'block';
+        document.getElementById('flightFields').className = isFlight?'input-panel show':'input-panel';
+        document.getElementById('transportFields').className = isTrans?'input-panel show':'input-panel';
+    }
+
+    function calcDuration() {
+        const dT=document.getElementById('depTime').value, aT=document.getElementById('arrTime').value;
+        const dZ=parseInt(document.getElementById('depZone').value), aZ=parseInt(document.getElementById('arrZone').value);
+        if(!dT || !aT) return;
+        document.getElementById('durationDisplay').innerText = `預估飛行: ${calculateDuration(dT,aT,dZ,aZ)}`;
+    }
+
+    function calculateDuration(depStr, arrStr, depZ, arrZ) {
+        let [dh, dm] = depStr.split(':').map(Number);
+        let [ah, am] = arrStr.split(':').map(Number);
+        let depMins = dh*60 + dm - (depZ*60);
+        let arrMins = ah*60 + am - (arrZ*60);
+        if (arrMins < depMins) arrMins += 24*60; 
+        let diff = arrMins - depMins;
+        return `${Math.floor(diff/60)}h ${diff%60}m`;
+    }
+
+    function autoUpdateTimezone(codeId, zoneId) {
+        const c = document.getElementById(codeId).value.toUpperCase();
+        if(airportTimezones[c] !== undefined) { document.getElementById(zoneId).value = airportTimezones[c]; calcDuration(); }
+    }
+    
+    // Save/Data Utils
+    function saveData() { localStorage.setItem('tripData_Edit', JSON.stringify(days)); localStorage.setItem('tripSettings_Edit', JSON.stringify(settings)); }
+    function clearData() { openConfirm('清除所有資料？', ()=>{ localStorage.clear(); location.reload(); }); }
+    
+    function renderTabs() {
+        const c = document.getElementById('dayTabs'); c.innerHTML='';
+        const keys = Object.keys(days).map(Number).sort((a,b)=>a-b);
+        const max = keys.length?Math.max(...keys):1;
+        for(let i=1;i<=max;i++) {
+            const d=document.createElement('div'); d.className=`day-tab ${i===currentDay?'active':''}`; d.innerText=`Day ${i}`;
+            d.onclick=()=>{currentDay=i;renderUI();}; c.appendChild(d);
+        }
+        const add=document.createElement('div'); add.className='day-tab'; add.innerText='+';
+        add.onclick=()=>{days[max+1]=[]; saveData(); currentDay=max+1; renderUI();}; c.appendChild(add);
+    }
+
+    // Modal Stubs
+    function openSettingsModal() { document.getElementById('settingsModalOverlay').classList.add('open'); document.getElementById('inputTripName').value=settings.tripName; document.getElementById('inputStartDate').value=settings.startDate; }
+    function saveSettings() { settings.tripName=document.getElementById('inputTripName').value; settings.startDate=document.getElementById('inputStartDate').value; saveData(); closeModal('settingsModalOverlay'); renderUI(); }
+    function openRateModal() { document.getElementById('rateModalOverlay').classList.add('open'); renderRateBarList(); }
+    function renderRateBarList() {
+        const c=document.getElementById('currentRatesList'); 
+        const html = Object.keys(settings.rates).map(k=>`<div><b>${k}</b>: ${settings.rates[k].toFixed(4)}</div>`).join('');
+        c.innerHTML = html || '無設定';
+    }
+    function saveRate() { settings.rates[document.getElementById('currencyCode').value.toUpperCase()] = parseFloat(document.getElementById('exchangeRate').value); saveData(); closeModal('rateModalOverlay'); renderUI(); }
+    function openPackingModal() { document.getElementById('packingModalOverlay').classList.add('open'); renderPacking(); }
+    function renderPacking() { 
+        const c=document.getElementById('packingListContainer'); c.innerHTML=''; 
+        settings.packingList.forEach((item,idx)=>{
+            const d=document.createElement('div'); d.style.padding='8px'; d.style.borderBottom='1px dashed #ddd';
+            d.innerHTML=`<input type="checkbox" ${item.chk?'checked':''} onchange="togglePack(${idx})"> ${item.n} <button onclick="delPack(${idx})" style="float:right;border:none;background:none;color:red;">×</button>`;
+            c.appendChild(d);
+        });
+    }
+    function addItemToPackingList() { settings.packingList.push({n:document.getElementById('newPackingItemName').value, chk:false}); document.getElementById('newPackingItemName').value=''; saveData(); renderPacking(); }
+    function togglePack(idx) { settings.packingList[idx].chk=!settings.packingList[idx].chk; saveData(); }
+    function delPack(idx) { settings.packingList.splice(idx,1); saveData(); renderPacking(); }
+
+    // 新增：打開資料備份 Modal
+    function openDataModal() { document.getElementById('dataModalOverlay').classList.add('open'); }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        renderUI();
+        initAutoUpdate(); 
+    });
+</script>
+</body>
+</html>
