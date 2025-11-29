@@ -14,23 +14,24 @@
     <link rel="apple-touch-icon" href="icon-192.png">
 
     <style>
-        /* --- 核心 UI 風格定義 --- */
+        /* --- 核心 UI 風格定義 (手繪筆記本風 - 還原版) --- */
         :root {
             --primary: #F0A040; --secondary: #90B44B; --money: #C64756;
             --flight-bg: #FFFFFF; --bg: #F9F7E8; --card-bg: #FFFFFF;
             --text: #3D3D3D; --gray: #A9A9A9; --border-color: #D3D3D3;
         }
+
         body {
             font-family: 'Avenir Next', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
             background-color: var(--bg); color: var(--text);
             margin: 0; padding: 0; height: 100vh;
             display: flex; flex-direction: column;
-            padding-top: env(safe-area-inset-top); 
-            padding-bottom: env(safe-area-inset-bottom);
+            padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
             /* [優化] 防止 iOS 下拉刷新與左右滑動上一頁，提升 App 質感 */
             overscroll-behavior-y: none;
             -webkit-overflow-scrolling: touch;
         }
+        
         header {
             background-color: var(--card-bg); padding: 18px 25px; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
@@ -38,14 +39,19 @@
         }
         .header-title { font-size: 1.2rem; color: var(--primary); font-weight: 700; letter-spacing: 1px; }
         .header-controls { display: flex; gap: 15px; align-items: center; }
-        .total-cost-display { font-size: 0.95rem; font-weight: 600; color: var(--money); }
+        
+        .total-cost-display { font-size: 0.95rem; font-weight: 600; color: var(--money); border: none; background: transparent; }
         .action-btn { cursor: pointer; font-size: 0.9rem; color: var(--gray); display: flex; align-items: center; gap: 4px; font-weight: 500; transition: 0.2s; }
         .action-btn:hover { color: var(--secondary); }
+
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; overflow-y: auto; width: 100%; }
+
         .rate-bar {
             background: #FFFBEB; color: var(--text); padding: 10px; 
             font-size: 0.85rem; text-align: center; cursor: pointer; 
             border-bottom: 1px dashed var(--border-color); line-height: 1.4; flex-shrink: 0;
         }
+
         .day-tabs {
             display: flex; overflow-x: auto; padding: 15px 25px; gap: 10px;
             scrollbar-width: none; background: var(--bg); flex-shrink: 0;
@@ -56,6 +62,7 @@
             cursor: pointer; white-space: nowrap; box-shadow: 1px 1px 0 rgba(0,0,0,0.05); transition: 0.2s;
         }
         .day-tab.active { background-color: var(--primary); color: #fff; border-color: var(--primary); box-shadow: 2px 2px 0 rgba(0,0,0,0.1); }
+
         .summary-box {
             margin: 0 25px 15px 25px; background: var(--card-bg); padding: 20px; 
             border-radius: 12px; display: flex; justify-content: space-between; align-items: center;
@@ -63,11 +70,10 @@
         }
         .summary-amount { font-size: 1.8rem; font-weight: 800; color: var(--money); }
         .summary-title { font-size: 0.85rem; color: var(--gray); cursor: pointer; text-decoration: underline dotted; }
-        .timeline-container {
-            flex: 1; 
+
+        .timeline-container { 
             padding: 10px 25px calc(90px + env(safe-area-inset-bottom)) 25px;
-            overflow-y: auto; 
-            max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;
+            max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box; 
         }
         .timeline-item { display: flex; margin-bottom: 30px; position: relative; animation: slideUp 0.3s ease-out; }
         .timeline-item::before {
@@ -76,11 +82,10 @@
             background-size: 1px 8px; z-index: 0;
         }
         .timeline-item:last-child::before { display: none; }
-        .time-col {
-            width: 70px; font-size: 0.9rem; color: var(--text); padding-top: 5px; 
-            text-align: left; padding-right: 15px; font-weight: 700; flex-shrink: 0; line-height: 1.3;
-        }
+
+        .time-col { width: 70px; font-size: 0.9rem; color: var(--text); padding-top: 5px; text-align: left; padding-right: 15px; font-weight: 700; flex-shrink: 0; line-height: 1.3; }
         .time-col span { display: block; font-weight: normal; font-size: 0.75rem; color: var(--gray); margin-top: 2px; }
+
         .card {
             background: var(--card-bg); border-radius: 12px; padding: 18px; flex: 1;
             box-shadow: 4px 4px 0 var(--border-color), 0 2px 8px rgba(0,0,0,0.05); 
@@ -88,40 +93,40 @@
         }
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
         .card-title { font-weight: 700; font-size: 1.1rem; }
-        .card-type-label {
-            font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px;
-            margin-bottom: 5px; display: inline-block;
-        }
+        .card-type-label { font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; margin-bottom: 5px; display: inline-block; }
         .tag-spot { background: #E6F7FF; color: #1890FF; border: 1px solid #BAE7FF; } 
         .tag-food { background: #FFF7E6; color: #FAAD14; border: 1px solid #FFE7BA; } 
         .tag-transport { background: #F9E6FF; color: #9254DE; border: 1px solid #D3ADF7; } 
         .tag-shopping { background: #F6FFED; color: var(--secondary); border: 1px solid #D9F7BE; }
         .tag-flight { background: #EAEAEA; color: var(--text); border: 1px solid #CACACA; }
+
         .card-actions { display: flex; gap: 10px; }
         .btn-icon { cursor: pointer; color: var(--gray); font-size: 1.1rem; border: none; background: none; padding: 0; }
         .btn-icon:hover { color: var(--money); }
         .card-loc {
             font-size: 0.85rem; color: var(--primary); display: inline-flex; align-items: center; 
             gap: 4px; background: #F0F0F0; padding: 5px 10px; border-radius: 8px; 
-            text-decoration: none; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            margin-top: 8px;
+            text-decoration: none; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 8px;
         }
         .flight-grid { display: grid; grid-template-columns: 20px 1fr; gap: 8px 10px; font-size: 0.9rem; align-items: center; margin-top: 8px; }
         .flight-icon { text-align: center; color: var(--gray); font-size: 0.9rem; }
         .flight-info-text { color: var(--text); }
         .flight-time-sub { font-size: 0.8rem; color: var(--gray); margin-left: 5px; }
+
         .transport-grid { display: grid; grid-template-columns: 20px 1fr; gap: 10px; margin-top: 8px; align-items: flex-start; }
         .transport-line { position: relative; display: flex; flex-direction: column; align-items: center; height: 100%; }
         .transport-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--border-color); background: #fff; z-index: 1;}
         .transport-bar { flex: 1; width: 2px; background: var(--border-color); margin: 2px 0; }
+        
         .card-cost {
             margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);
             font-size: 1rem; color: var(--money); font-weight: 700;
             display: flex; justify-content: space-between; align-items: center;
         }
+
         .fab {
             position: fixed; 
-            bottom: calc(30px + env(safe-area-inset-bottom)); 
+            bottom: calc(30px + env(safe-area-inset-bottom));
             right: 30px; width: 55px; height: 55px; 
             background: var(--primary); color: var(--card-bg); font-size: 30px; border: none; 
             cursor: pointer; z-index: 101; border-radius: 50%; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -156,6 +161,7 @@
         .btn-primary { background: var(--primary); color: var(--card-bg); }
         .btn-cancel { background: var(--border-color); color: var(--text); }
         .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); border-radius: 8px; font-weight:bold; cursor:pointer; padding: 8px;}
+
         #sys-toast {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: #333; color: #fff; padding: 10px 20px; border-radius: 8px;
@@ -169,8 +175,30 @@
         .sys-box { background: #fff; padding: 20px; border-radius: 12px; text-align: center; width: 280px; }
         .sys-btns { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
         .sys-btn { padding: 8px 20px; border-radius: 6px; border:none; cursor:pointer; font-weight:bold; }
+
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* --- Responsive Desktop Design (>= 768px) --- */
+        @media (min-width: 768px) {
+            body { background-color: #EBE7D5; align-items: center; }
+            header { width: 100%; max-width: 1000px; margin-bottom: 10px; border-radius: 0 0 12px 12px; }
+            .main-wrapper {
+                display: grid; grid-template-columns: 320px 1fr; gap: 25px;
+                max-width: 1000px; width: 100%; padding: 0 20px 20px 20px;
+                box-sizing: border-box; align-items: start; overflow-y: visible;
+            }
+            .dashboard-sidebar { display: flex; flex-direction: column; gap: 15px; position: sticky; top: 90px; }
+            .rate-bar { border-radius: 10px; border: 1px solid var(--border-color); }
+            .day-tabs { flex-wrap: wrap; justify-content: flex-start; padding: 0; background: transparent; }
+            .day-tab { margin-bottom: 5px; flex: 0 0 auto; }
+            .summary-box { margin: 0; }
+            .timeline-container { max-width: none; padding: 0; margin: 0; overflow-y: visible; }
+            .fab { right: calc((100vw - 1000px) / 2 + 40px); }
+        }
+        @media (min-width: 1080px) {
+            .fab { right: 50%; margin-right: -460px; }
+        }
     </style>
 </head>
 <body>
@@ -186,22 +214,23 @@
     </div>
 </header>
 
-<div class="rate-bar" id="rateBar" onclick="openRateModal()">
-    <div id="rateText">載入匯率中...</div>
-</div>
-
-<div class="day-tabs" id="dayTabs"></div>
-
-<div class="summary-box">
-    <div>
-        <div style="font-size:0.8rem; color:var(--gray); margin-bottom:4px;">
-            Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
+<div class="main-wrapper">
+    <div class="dashboard-sidebar">
+        <div class="rate-bar" id="rateBar" onclick="openRateModal()">
+            <div id="rateText">載入匯率中...</div>
         </div>
-        <div class="summary-amount" id="dayTotal">TWD 0</div>
+        <div class="summary-box">
+            <div>
+                <div style="font-size:0.8rem; color:var(--gray); margin-bottom:4px;">
+                    Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
+                </div>
+                <div class="summary-amount" id="dayTotal">TWD 0</div>
+            </div>
+        </div>
+        <div class="day-tabs" id="dayTabs"></div>
     </div>
+    <div class="timeline-container" id="timelineContainer"></div>
 </div>
-
-<div class="timeline-container" id="timelineContainer"></div>
 
 <button class="fab" onclick="openModal()">+</button>
 <input type="file" id="importFile" accept=".xlsx, .xls" style="display: none;" onchange="importFromExcel(event)">
@@ -217,7 +246,6 @@
     </div>
 </div>
 
-<!-- Items Modal -->
 <div class="modal-overlay" id="itemModalOverlay">
     <div class="modal">
         <h2 style="margin:0; color:var(--primary);" id="modalTitle">新增行程</h2>
@@ -327,7 +355,7 @@
         <h2 style="color:var(--primary)">資料備份 / 還原</h2>
         <p style="font-size:0.9rem; color:#666; margin-bottom:15px; line-height: 1.5;">您可以將目前的行程匯出成 Excel 檔案進行備份，或是匯入之前的備份檔。</p>
         <div class="btn-group" style="flex-direction: column; gap: 15px;">
-            <button class="btn btn-outline" onclick="exportToExcel()">📥 匯出行程 (Excel)</button>
+            <button class="btn btn-outline" onclick="exportToExcel(); closeModal('dataModalOverlay')">📥 匯出行程 (Excel)</button>
             <button class="btn btn-outline" onclick="triggerImport(); closeModal('dataModalOverlay')">📂 匯入行程 (Excel)</button>
         </div>
         <button class="btn btn-cancel" style="margin-top:15px;" onclick="closeModal('dataModalOverlay')">關閉</button>
@@ -500,9 +528,10 @@
                             if (dayNum === 1 && row["日期"] && !foundStartDate) foundStartDate = row["日期"];
                             if (!newDays[dayNum]) newDays[dayNum] = [];
 
+                            // --- 優化：混合讀取邏輯 ---
                             let item = null;
                             const hiddenJson = row["SYSTEM_DATA (Do Not Edit)"];
-                            if(hiddenJson) {
+                            if (hiddenJson) {
                                 try {
                                     const base = JSON.parse(hiddenJson);
                                     item = {
@@ -519,6 +548,7 @@
                                 }
                             }
 
+                            // 如果沒有隱藏資料或解析失敗，才執行原本的字串解析邏輯 (相容模式/新列)
                             if (!item) {
                                 const typeMap = { '景點':'spot', '美食':'food', '交通':'transport', '購物':'shopping', '航班':'flight' };
                                 const type = typeMap[row["類型"]] || 'spot';
@@ -573,10 +603,11 @@
                                             item.transportArrLoc = parts[1].trim();
                                         }
                                     }
+
                                 } else {
                                     item.time = depTime; item.loc = row["詳細資訊/地點"] || "";
                                 }
-                            }
+                            } // End fallback parsing
 
                             newDays[dayNum].push(item);
                         });
@@ -605,10 +636,9 @@
     }
 
     async function exportToExcel() {
-        try { await loadSheetJS(); } catch(e) { return; }
-
         if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
-        closeModal('dataModalOverlay');
+        
+        try { await loadSheetJS(); } catch(e) { return; }
 
         const header = ["Day", "日期", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註", "SYSTEM_DATA (Do Not Edit)"];
         const data = [header];
@@ -647,7 +677,7 @@
                     details, cost > 0 ? cost : '', cost > 0 ? currency : '',
                     cost > 0 && currency !== 'TWD' ? rate.toFixed(3) : '',
                     cost > 0 ? costTWD : '', item.notes || '',
-                    JSON.stringify(item) 
+                    JSON.stringify(item) // 將原始物件序列化存入隱藏欄位
                 ]);
             });
         });
