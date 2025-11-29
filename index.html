@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -12,24 +13,24 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="icon-192.png">
 
-    <!-- 優化：移除同步載入的 SheetJS，改為動態 Lazy Load -->
-
     <style>
-        /* --- 核心 UI 風格定義 (手繪筆記本風 - 還原版) --- */
+        /* --- 核心 UI 風格定義 --- */
         :root {
             --primary: #F0A040; --secondary: #90B44B; --money: #C64756;
             --flight-bg: #FFFFFF; --bg: #F9F7E8; --card-bg: #FFFFFF;
             --text: #3D3D3D; --gray: #A9A9A9; --border-color: #D3D3D3;
         }
-
         body {
             font-family: 'Avenir Next', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
             background-color: var(--bg); color: var(--text);
             margin: 0; padding: 0; height: 100vh;
             display: flex; flex-direction: column;
-            padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+            padding-top: env(safe-area-inset-top); 
+            padding-bottom: env(safe-area-inset-bottom);
+            /* [優化] 防止 iOS 下拉刷新與左右滑動上一頁，提升 App 質感 */
+            overscroll-behavior-y: none;
+            -webkit-overflow-scrolling: touch;
         }
-        
         header {
             background-color: var(--card-bg); padding: 18px 25px; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
@@ -37,19 +38,14 @@
         }
         .header-title { font-size: 1.2rem; color: var(--primary); font-weight: 700; letter-spacing: 1px; }
         .header-controls { display: flex; gap: 15px; align-items: center; }
-        
-        .total-cost-display { font-size: 0.95rem; font-weight: 600; color: var(--money); border: none; background: transparent; }
+        .total-cost-display { font-size: 0.95rem; font-weight: 600; color: var(--money); }
         .action-btn { cursor: pointer; font-size: 0.9rem; color: var(--gray); display: flex; align-items: center; gap: 4px; font-weight: 500; transition: 0.2s; }
         .action-btn:hover { color: var(--secondary); }
-
-        .main-wrapper { flex: 1; display: flex; flex-direction: column; overflow-y: auto; width: 100%; }
-
         .rate-bar {
             background: #FFFBEB; color: var(--text); padding: 10px; 
             font-size: 0.85rem; text-align: center; cursor: pointer; 
             border-bottom: 1px dashed var(--border-color); line-height: 1.4; flex-shrink: 0;
         }
-
         .day-tabs {
             display: flex; overflow-x: auto; padding: 15px 25px; gap: 10px;
             scrollbar-width: none; background: var(--bg); flex-shrink: 0;
@@ -60,7 +56,6 @@
             cursor: pointer; white-space: nowrap; box-shadow: 1px 1px 0 rgba(0,0,0,0.05); transition: 0.2s;
         }
         .day-tab.active { background-color: var(--primary); color: #fff; border-color: var(--primary); box-shadow: 2px 2px 0 rgba(0,0,0,0.1); }
-
         .summary-box {
             margin: 0 25px 15px 25px; background: var(--card-bg); padding: 20px; 
             border-radius: 12px; display: flex; justify-content: space-between; align-items: center;
@@ -68,8 +63,12 @@
         }
         .summary-amount { font-size: 1.8rem; font-weight: 800; color: var(--money); }
         .summary-title { font-size: 0.85rem; color: var(--gray); cursor: pointer; text-decoration: underline dotted; }
-
-        .timeline-container { padding: 10px 25px 80px 25px; max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .timeline-container {
+            flex: 1; 
+            padding: 10px 25px calc(90px + env(safe-area-inset-bottom)) 25px;
+            overflow-y: auto; 
+            max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;
+        }
         .timeline-item { display: flex; margin-bottom: 30px; position: relative; animation: slideUp 0.3s ease-out; }
         .timeline-item::before {
             content: ''; position: absolute; left: 35px; top: 30px; bottom: -30px; width: 1px; 
@@ -77,10 +76,11 @@
             background-size: 1px 8px; z-index: 0;
         }
         .timeline-item:last-child::before { display: none; }
-
-        .time-col { width: 70px; font-size: 0.9rem; color: var(--text); padding-top: 5px; text-align: left; padding-right: 15px; font-weight: 700; flex-shrink: 0; line-height: 1.3; }
+        .time-col {
+            width: 70px; font-size: 0.9rem; color: var(--text); padding-top: 5px; 
+            text-align: left; padding-right: 15px; font-weight: 700; flex-shrink: 0; line-height: 1.3;
+        }
         .time-col span { display: block; font-weight: normal; font-size: 0.75rem; color: var(--gray); margin-top: 2px; }
-
         .card {
             background: var(--card-bg); border-radius: 12px; padding: 18px; flex: 1;
             box-shadow: 4px 4px 0 var(--border-color), 0 2px 8px rgba(0,0,0,0.05); 
@@ -88,39 +88,41 @@
         }
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
         .card-title { font-weight: 700; font-size: 1.1rem; }
-        .card-type-label { font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; margin-bottom: 5px; display: inline-block; }
+        .card-type-label {
+            font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px;
+            margin-bottom: 5px; display: inline-block;
+        }
         .tag-spot { background: #E6F7FF; color: #1890FF; border: 1px solid #BAE7FF; } 
         .tag-food { background: #FFF7E6; color: #FAAD14; border: 1px solid #FFE7BA; } 
         .tag-transport { background: #F9E6FF; color: #9254DE; border: 1px solid #D3ADF7; } 
         .tag-shopping { background: #F6FFED; color: var(--secondary); border: 1px solid #D9F7BE; }
         .tag-flight { background: #EAEAEA; color: var(--text); border: 1px solid #CACACA; }
-
         .card-actions { display: flex; gap: 10px; }
         .btn-icon { cursor: pointer; color: var(--gray); font-size: 1.1rem; border: none; background: none; padding: 0; }
         .btn-icon:hover { color: var(--money); }
         .card-loc {
             font-size: 0.85rem; color: var(--primary); display: inline-flex; align-items: center; 
             gap: 4px; background: #F0F0F0; padding: 5px 10px; border-radius: 8px; 
-            text-decoration: none; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 8px;
+            text-decoration: none; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            margin-top: 8px;
         }
         .flight-grid { display: grid; grid-template-columns: 20px 1fr; gap: 8px 10px; font-size: 0.9rem; align-items: center; margin-top: 8px; }
         .flight-icon { text-align: center; color: var(--gray); font-size: 0.9rem; }
         .flight-info-text { color: var(--text); }
         .flight-time-sub { font-size: 0.8rem; color: var(--gray); margin-left: 5px; }
-
         .transport-grid { display: grid; grid-template-columns: 20px 1fr; gap: 10px; margin-top: 8px; align-items: flex-start; }
         .transport-line { position: relative; display: flex; flex-direction: column; align-items: center; height: 100%; }
         .transport-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--border-color); background: #fff; z-index: 1;}
         .transport-bar { flex: 1; width: 2px; background: var(--border-color); margin: 2px 0; }
-        
         .card-cost {
             margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);
             font-size: 1rem; color: var(--money); font-weight: 700;
             display: flex; justify-content: space-between; align-items: center;
         }
-
         .fab {
-            position: fixed; bottom: 30px; right: 30px; width: 55px; height: 55px; 
+            position: fixed; 
+            bottom: calc(30px + env(safe-area-inset-bottom)); 
+            right: 30px; width: 55px; height: 55px; 
             background: var(--primary); color: var(--card-bg); font-size: 30px; border: none; 
             cursor: pointer; z-index: 101; border-radius: 50%; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             display: flex; justify-content: center; align-items: center;
@@ -136,6 +138,7 @@
             border-radius: 15px 15px 0 0; padding: 25px; animation: slideUpModal 0.3s; 
             display: flex; flex-direction: column; gap: 15px; max-height: 90vh; overflow-y: auto;
             border-top: 4px solid var(--secondary);
+            padding-bottom: calc(25px + env(safe-area-inset-bottom));
         }
         .form-label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text); font-weight: 600; }
         .form-input, .zone-select, .currency-select {
@@ -153,7 +156,6 @@
         .btn-primary { background: var(--primary); color: var(--card-bg); }
         .btn-cancel { background: var(--border-color); color: var(--text); }
         .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); border-radius: 8px; font-weight:bold; cursor:pointer; padding: 8px;}
-
         #sys-toast {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: #333; color: #fff; padding: 10px 20px; border-radius: 8px;
@@ -167,30 +169,8 @@
         .sys-box { background: #fff; padding: 20px; border-radius: 12px; text-align: center; width: 280px; }
         .sys-btns { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
         .sys-btn { padding: 8px 20px; border-radius: 6px; border:none; cursor:pointer; font-weight:bold; }
-
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-        /* --- Responsive Desktop Design (>= 768px) --- */
-        @media (min-width: 768px) {
-            body { background-color: #EBE7D5; align-items: center; }
-            header { width: 100%; max-width: 1000px; margin-bottom: 10px; border-radius: 0 0 12px 12px; }
-            .main-wrapper {
-                display: grid; grid-template-columns: 320px 1fr; gap: 25px;
-                max-width: 1000px; width: 100%; padding: 0 20px 20px 20px;
-                box-sizing: border-box; align-items: start; overflow-y: visible;
-            }
-            .dashboard-sidebar { display: flex; flex-direction: column; gap: 15px; position: sticky; top: 90px; }
-            .rate-bar { border-radius: 10px; border: 1px solid var(--border-color); }
-            .day-tabs { flex-wrap: wrap; justify-content: flex-start; padding: 0; background: transparent; }
-            .day-tab { margin-bottom: 5px; flex: 0 0 auto; }
-            .summary-box { margin: 0; }
-            .timeline-container { max-width: none; padding: 0; margin: 0; overflow-y: visible; }
-            .fab { right: calc((100vw - 1000px) / 2 + 40px); }
-        }
-        @media (min-width: 1080px) {
-            .fab { right: 50%; margin-right: -460px; }
-        }
     </style>
 </head>
 <body>
@@ -206,23 +186,22 @@
     </div>
 </header>
 
-<div class="main-wrapper">
-    <div class="dashboard-sidebar">
-        <div class="rate-bar" id="rateBar" onclick="openRateModal()">
-            <div id="rateText">載入匯率中...</div>
-        </div>
-        <div class="summary-box">
-            <div>
-                <div style="font-size:0.8rem; color:var(--gray); margin-bottom:4px;">
-                    Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
-                </div>
-                <div class="summary-amount" id="dayTotal">TWD 0</div>
-            </div>
-        </div>
-        <div class="day-tabs" id="dayTabs"></div>
-    </div>
-    <div class="timeline-container" id="timelineContainer"></div>
+<div class="rate-bar" id="rateBar" onclick="openRateModal()">
+    <div id="rateText">載入匯率中...</div>
 </div>
+
+<div class="day-tabs" id="dayTabs"></div>
+
+<div class="summary-box">
+    <div>
+        <div style="font-size:0.8rem; color:var(--gray); margin-bottom:4px;">
+            Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
+        </div>
+        <div class="summary-amount" id="dayTotal">TWD 0</div>
+    </div>
+</div>
+
+<div class="timeline-container" id="timelineContainer"></div>
 
 <button class="fab" onclick="openModal()">+</button>
 <input type="file" id="importFile" accept=".xlsx, .xls" style="display: none;" onchange="importFromExcel(event)">
@@ -238,6 +217,7 @@
     </div>
 </div>
 
+<!-- Items Modal -->
 <div class="modal-overlay" id="itemModalOverlay">
     <div class="modal">
         <h2 style="margin:0; color:var(--primary);" id="modalTitle">新增行程</h2>
@@ -303,7 +283,8 @@
                     <option value="VND">VND</option><option value="PHP">PHP</option><option value="NZD">NZD</option>
                     <option value="GBP">GBP</option><option value="IDR">IDR</option><option value="CHF">CHF</option>
                 </select>
-                <input type="number" class="form-input" id="inputCost" placeholder="0" style="flex:2;">
+                <!-- [優化] inputmode="decimal" 確保手機呼叫數字鍵盤 -->
+                <input type="number" class="form-input" id="inputCost" placeholder="0" style="flex:2;" inputmode="decimal">
             </div>
         </div>
         <div style="margin-top:15px;">
@@ -328,7 +309,8 @@
         </p>
         <div class="form-row" style="margin-top:10px;">
             <input type="text" id="currencyCode" class="form-input" placeholder="代號 (如 JPY)" style="text-transform:uppercase; flex:1;">
-            <input type="number" id="exchangeRate" class="form-input" placeholder="匯率 (1外幣=?台幣)" style="flex:2;">
+            <!-- [優化] inputmode="decimal" -->
+            <input type="number" id="exchangeRate" class="form-input" placeholder="匯率 (1外幣=?台幣)" style="flex:2;" inputmode="decimal">
         </div>
         <button class="btn-outline" style="width:100%; margin-top:10px;" onclick="fetchRateManual()">🌐 嘗試線上抓取 (輔助)</button>
         <div class="btn-group" style="margin-top:15px;">
@@ -345,7 +327,7 @@
         <h2 style="color:var(--primary)">資料備份 / 還原</h2>
         <p style="font-size:0.9rem; color:#666; margin-bottom:15px; line-height: 1.5;">您可以將目前的行程匯出成 Excel 檔案進行備份，或是匯入之前的備份檔。</p>
         <div class="btn-group" style="flex-direction: column; gap: 15px;">
-            <button class="btn btn-outline" onclick="exportToExcel(); closeModal('dataModalOverlay')">📥 匯出行程 (Excel)</button>
+            <button class="btn btn-outline" onclick="exportToExcel()">📥 匯出行程 (Excel)</button>
             <button class="btn btn-outline" onclick="triggerImport(); closeModal('dataModalOverlay')">📂 匯入行程 (Excel)</button>
         </div>
         <button class="btn btn-cancel" style="margin-top:15px;" onclick="closeModal('dataModalOverlay')">關閉</button>
@@ -353,7 +335,6 @@
 </div>
 
 <script>
-    // --- 優化：常數提取 ---
     const AIRPORT_TIMEZONES = {
         "TPE": "+8", "TSA": "+8", "KHH": "+8", "RMQ": "+8",
         "NRT": "+9", "HND": "+9", "KIX": "+9", "FUK": "+9", "CTS": "+9", "OKA": "+9", "NGO": "+9", "SDJ": "+9", "ISG": "+9",
@@ -372,7 +353,6 @@
     const DEFAULT_RATES = { 'JPY': 0.21, 'USD': 30.5, 'EUR': 32.5, 'TWD': 1.0 };
     const NEW_CURRENCIES = { 'THB': 0.9, 'VND': 0.0013, 'PHP': 0.56, 'NZD': 19.5, 'GBP': 40.5, 'IDR': 0.002, 'CHF': 35.5, 'KRW': 0.024 };
 
-    // --- 優化：XSS 防護與 Lazy Loading ---
     function escapeHtml(text) {
         if (!text) return "";
         return text.replace(/[&<>"']/g, function(m) {
@@ -499,7 +479,6 @@
         const file = event.target.files[0];
         if (!file) return;
 
-        // 優化：等待庫載入
         try { await loadSheetJS(); } catch(e) { return; }
 
         openConfirm("匯入將會覆蓋目前的行程資料，確定要繼續嗎？", () => {
@@ -521,64 +500,84 @@
                             if (dayNum === 1 && row["日期"] && !foundStartDate) foundStartDate = row["日期"];
                             if (!newDays[dayNum]) newDays[dayNum] = [];
 
-                            const typeMap = { '景點':'spot', '美食':'food', '交通':'transport', '購物':'shopping', '航班':'flight' };
-                            const type = typeMap[row["類型"]] || 'spot';
-
-                            let time = row["時間"] || "", depTime = time, arrTime = "";
-                            if (time.includes("-")) {
-                                const parts = time.split("-").map(t => t.trim());
-                                depTime = parts[0]; arrTime = parts[1];
+                            let item = null;
+                            const hiddenJson = row["SYSTEM_DATA (Do Not Edit)"];
+                            if(hiddenJson) {
+                                try {
+                                    const base = JSON.parse(hiddenJson);
+                                    item = {
+                                        ...base,
+                                        title: row["項目名稱"] || base.title,
+                                        cost: (row["原始金額"] !== undefined && row["原始金額"] !== '') ? parseFloat(row["原始金額"]) : base.cost,
+                                        currency: row["幣別"] || base.currency,
+                                        notes: row["備註"] || base.notes,
+                                        // [優化] 強制生成新 ID，防止 Excel 複製貼上導致 ID 重複
+                                        id: Date.now() + Math.random() 
+                                    };
+                                } catch(err) {
+                                    console.warn("JSON Parse Error, fallback to text parsing", err);
+                                }
                             }
 
-                            const item = {
-                                id: Date.now() + Math.random(),
-                                type: type,
-                                title: row["項目名稱"] || "",
-                                cost: parseFloat(row["原始金額"]) || 0,
-                                currency: row["幣別"] || "TWD",
-                                notes: row["備註"] || ""
-                            };
+                            if (!item) {
+                                const typeMap = { '景點':'spot', '美食':'food', '交通':'transport', '購物':'shopping', '航班':'flight' };
+                                const type = typeMap[row["類型"]] || 'spot';
 
-                            if (type === 'flight') {
-                                item.depTime = depTime; item.arrTime = arrTime;
-                                item.flightCode = item.title;
-                                
-                                let details = row["詳細資訊/地點"] || "";
-                                item.depCode = ""; item.arrCode = ""; 
-                                item.depZone = 8; item.arrZone = 8;
+                                let time = row["時間"] || "", depTime = time, arrTime = "";
+                                if (time.includes("-")) {
+                                    const parts = time.split("-").map(t => t.trim());
+                                    depTime = parts[0]; arrTime = parts[1];
+                                }
 
-                                // --- BUG 修復：解析航班詳細資訊 ---
-                                if(details.includes("|") && details.includes("->")) {
-                                    const parts = details.split("|")[1].split("->");
-                                    if(parts.length >= 2) {
-                                        item.depCode = parts[0].trim();
-                                        item.arrCode = parts[1].trim();
-                                        if(AIRPORT_TIMEZONES[item.depCode]) item.depZone = parseInt(AIRPORT_TIMEZONES[item.depCode]);
-                                        if(AIRPORT_TIMEZONES[item.arrCode]) item.arrZone = parseInt(AIRPORT_TIMEZONES[item.arrCode]);
+                                item = {
+                                    id: Date.now() + Math.random(),
+                                    type: type,
+                                    title: row["項目名稱"] || "",
+                                    cost: parseFloat(row["原始金額"]) || 0,
+                                    currency: row["幣別"] || "TWD",
+                                    notes: row["備註"] || ""
+                                };
+
+                                if (type === 'flight') {
+                                    item.depTime = depTime; item.arrTime = arrTime;
+                                    item.flightCode = item.title;
+                                    
+                                    let details = row["詳細資訊/地點"] || "";
+                                    item.depCode = ""; item.arrCode = ""; 
+                                    item.depZone = 8; item.arrZone = 8;
+
+                                    if(details.includes("|") && details.includes("->")) {
+                                        const parts = details.split("|")[1].split("->");
+                                        if(parts.length >= 2) {
+                                            item.depCode = parts[0].trim();
+                                            item.arrCode = parts[1].trim();
+                                            if(AIRPORT_TIMEZONES[item.depCode]) item.depZone = parseInt(AIRPORT_TIMEZONES[item.depCode]);
+                                            if(AIRPORT_TIMEZONES[item.arrCode]) item.arrZone = parseInt(AIRPORT_TIMEZONES[item.arrCode]);
+                                        }
                                     }
-                                }
-                                if(item.depTime && item.arrTime) {
-                                    item.duration = calculateDuration(item.depTime, item.arrTime, item.depZone, item.arrZone);
-                                }
-                                
-                            } else if (type === 'transport') {
-                                item.depTime = depTime; item.arrTime = arrTime;
-                                item.transportMode = item.title;
-                                
-                                // --- BUG 修復：解析交通起訖點 ---
-                                let details = row["詳細資訊/地點"] || "";
-                                item.transportDepLoc = ""; item.transportArrLoc = "";
-                                if(details.includes("|") && details.includes("->")) {
-                                    const parts = details.split("|")[1].split("->");
-                                    if(parts.length >= 2) {
-                                        item.transportDepLoc = parts[0].trim();
-                                        item.transportArrLoc = parts[1].trim();
+                                    if(item.depTime && item.arrTime) {
+                                        item.duration = calculateDuration(item.depTime, item.arrTime, item.depZone, item.arrZone);
                                     }
+                                    
+                                } else if (type === 'transport') {
+                                    item.depTime = depTime; item.arrTime = arrTime;
+                                    item.transportMode = item.title;
+                                    
+                                    let details = row["詳細資訊/地點"] || "";
+                                    item.transportDepLoc = ""; item.transportArrLoc = "";
+                                    
+                                    if(details.includes("|") && details.includes("->")) {
+                                        const parts = details.split("|")[1].split("->");
+                                        if(parts.length >= 2) {
+                                            item.transportDepLoc = parts[0].trim();
+                                            item.transportArrLoc = parts[1].trim();
+                                        }
+                                    }
+                                } else {
+                                    item.time = depTime; item.loc = row["詳細資訊/地點"] || "";
                                 }
-
-                            } else {
-                                item.time = depTime; item.loc = row["詳細資訊/地點"] || "";
                             }
+
                             newDays[dayNum].push(item);
                         });
 
@@ -593,7 +592,6 @@
                         }));
                     }
 
-                    // --- BUG 修復：使用檔名作為旅程標題 ---
                     settings.tripName = file.name.replace(/\.[^/.]+$/, ""); 
 
                     saveData();
@@ -607,12 +605,12 @@
     }
 
     async function exportToExcel() {
-        if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
-        
-        // 優化：等待庫載入
         try { await loadSheetJS(); } catch(e) { return; }
 
-        const header = ["Day", "日期", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註"];
+        if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
+        closeModal('dataModalOverlay');
+
+        const header = ["Day", "日期", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註", "SYSTEM_DATA (Do Not Edit)"];
         const data = [header];
         const sortedDays = Object.keys(days).map(Number).sort((a,b)=>a-b);
         
@@ -648,13 +646,15 @@
                     item.title || item.flightCode || item.transportMode || '',
                     details, cost > 0 ? cost : '', cost > 0 ? currency : '',
                     cost > 0 && currency !== 'TWD' ? rate.toFixed(3) : '',
-                    cost > 0 ? costTWD : '', item.notes || ''
+                    cost > 0 ? costTWD : '', item.notes || '',
+                    JSON.stringify(item) 
                 ]);
             });
         });
 
         const ws = XLSX.utils.aoa_to_sheet(data);
-        ws['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 }, { wch: 10 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 30 }];
+        // 設定欄寬，最後一欄隱藏
+        ws['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 }, { wch: 10 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 30 }, { hidden: true }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "行程明細");
 
@@ -686,7 +686,6 @@
         document.getElementById('rateText').innerHTML = `<div style="font-weight:700">${rateStr}</div><div style="font-size:0.75rem; color:#666; margin-top:3px;">來源: Global API (含1.5%緩衝) | 更新: ${lastUpdateStr}</div>`;
     }
 
-    // --- 優化：使用 DocumentFragment ---
     function renderTimeline() {
         const container = document.getElementById('timelineContainer');
         container.innerHTML = '';
@@ -719,7 +718,6 @@
         container.appendChild(fragment);
     }
 
-    // --- 優化：加入 escapeHtml 防護 ---
     function getCardHTML(item) {
         let timeDisplay = item.time || item.depTime || '';
         let timeSub = '';
@@ -763,9 +761,12 @@
         } else {
             if(item.loc) {
                 const isUrl = item.loc.startsWith('http');
-                const url = isUrl ? item.loc : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.loc)}`;
+                let safeUrl = isUrl ? item.loc : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.loc)}`;
+                // [優化] 簡單的 URL 過濾，防止 javascript: 攻擊
+                if (safeUrl.toLowerCase().trim().startsWith('javascript:')) safeUrl = '#';
+
                 const locText = item.loc.length > 30 ? '地圖連結' : item.loc;
-                contentHTML += `<a href="${escapeHtml(url)}" target="_blank" class="card-loc">📍 ${escapeHtml(locText)}</a>`;
+                contentHTML += `<a href="${escapeHtml(safeUrl)}" target="_blank" class="card-loc">📍 ${escapeHtml(locText)}</a>`;
             }
         }
         
@@ -854,7 +855,6 @@
                     document.getElementById('depTime').value = item.depTime || '09:00';
                     document.getElementById('arrTime').value = item.arrTime || '10:00';
                     
-                    // --- BUG 修復：格式化時區以符合 select option 的字串格式 (+8) ---
                     const formatZone = z => (parseInt(z) >= 0 ? '+' : '') + parseInt(z);
                     document.getElementById('depZone').value = formatZone(item.depZone !== undefined ? item.depZone : 8);
                     document.getElementById('arrZone').value = formatZone(item.arrZone !== undefined ? item.arrZone : 9);

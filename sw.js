@@ -1,35 +1,39 @@
-// --- START OF FILE sw.js ---
+--- START OF FILE sw.js ---
 
-// 修改這裡：更新版本號為 v8，確保瀏覽器重新下載優化後的 index.html
-const CACHE_NAME = 'travel-note-v8';
+// 版本號更新為 v9 (優化快取策略與穩定性)
+const CACHE_NAME = 'travel-note-v9';
 
-const ASSETS_TO_CACHE = [
+// 核心檔案：必須下載成功才能安裝 Service Worker
+const CORE_ASSETS = [
     './',
     './index.html',
     './manifest.json',
     './icon-192.png',
-    './icon-512.png',
-    // 即使前端改為懶加載，這裡仍須保留，讓 SW 在背景預先下載，確保離線時也能匯出
+    './icon-512.png'
+];
+
+// 外部依賴：如果下載失敗，不應阻止 App 運作
+const OPTIONAL_ASSETS = [
     'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js'
 ];
 
-// 安裝 Service Worker 並快取靜態資源
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => {
-                console.log('[Service Worker] Caching all assets');
-                return cache.addAll(ASSETS_TO_CACHE);
+                console.log('[Service Worker] Caching assets');
+                // 嘗試快取外部依賴，失敗只會發出警告，不會中斷安裝
+                cache.addAll(OPTIONAL_ASSETS).catch(err => console.warn('[SW] Optional assets failed:', err));
+                // 核心檔案必須成功
+                return cache.addAll(CORE_ASSETS);
             })
     );
 });
 
-// 啟用並清除舊快取
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keyList) => {
             return Promise.all(keyList.map((key) => {
-                // 清除舊版本的快取
                 if (key !== CACHE_NAME) {
                     console.log('[Service Worker] Removing old cache', key);
                     return caches.delete(key);
@@ -37,13 +41,11 @@ self.addEventListener('activate', (event) => {
             }));
         })
     );
-    // 強制讓新版 Service Worker 立即接管頁面
     return self.clients.claim();
 });
 
-// 攔截請求：優先使用快取，無網路時也能顯示 App
 self.addEventListener('fetch', (event) => {
-    // 排除 API 請求 (匯率 API 需要即時連線)
+    // 匯率 API 依然走網路優先
     if (event.request.url.includes('api.exchangerate-api.com') || 
         event.request.url.includes('open.er-api.com')) {
         return; 
